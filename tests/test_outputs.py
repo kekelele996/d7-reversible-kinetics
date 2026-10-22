@@ -139,6 +139,30 @@ def test_wrong_argument_count_exits_2():
     assert proc.stdout.strip() == ""
 
 
+def test_repeated_run_returns_the_same_json():
+    """「同一份批次文件重复执行，输出必须一致」"""
+    payload, _ = make_case(
+        initial=0.73,
+        concentration=0.016,
+        epsilon_a=1180.0,
+        epsilon_b=320.0,
+        blank=0.005,
+        kf=0.0046,
+        kb=0.0031,
+        dead_time=0.35,
+        clocks=[0.60, 0.82, 1.15, 1.63, 2.30, 3.25, 4.60, 6.40, 8.90, 12.2],
+    )
+    folder = Path(tempfile.mkdtemp(prefix="repeat-"))
+    folder.chmod(0o755)
+    path = folder / "case.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    path.chmod(0o644)
+    first = run_candidate(path)
+    second = run_candidate(path)
+    assert first.returncode == second.returncode == 0
+    assert first.stdout == second.stdout
+
+
 # ---------- difficulty_1: mixture response and equilibrium composition ----------
 
 def test_equilibrium_fraction_includes_both_component_absorptivities():

@@ -2,7 +2,8 @@
   "schema_version": 1,
   "gate_tests": [
     "test_outputs.py::test_prints_only_the_contract_fields",
-    "test_outputs.py::test_wrong_argument_count_exits_2"
+    "test_outputs.py::test_wrong_argument_count_exits_2",
+    "test_outputs.py::test_repeated_run_returns_the_same_json"
   ],
   "tests": {
     "test_outputs.py::test_equilibrium_fraction_includes_both_component_absorptivities": {
