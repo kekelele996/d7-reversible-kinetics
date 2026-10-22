@@ -1,0 +1,47 @@
+schema_version = "1.3"
+artifacts = []
+
+[task]
+name = "local/d7-reversible-kinetics"
+description = "可逆一级反应在线浓度曲线的动力学参数反演"
+keywords = ["chemistry", "reversible-kinetics", "beer-lambert", "nonlinear-regression", "isomerization"]
+[[task.authors]]
+name = "高博"
+
+[metadata]
+author_name = "高博"
+author_email = "unknown"
+difficulty = "hard"
+category = "computational-chemistry"
+tags = ["chemistry", "reversible-kinetics", "spectroscopy", "nonlinear-regression"]
+# 审核器按字符串解析（"4h"、"90m"）；裸数字会被当成小时。_min 版本给平台表格用。
+expert_time_estimate = "4h"
+expert_time_estimate_min = 240
+junior_time_estimate_min = 0
+
+[verifier]
+timeout_sec = 300              # test.sh 内层 timeout 240s，留 60 s 给清场和写 reward
+environment_mode = "shared"    # 显式写 shared：独立评分容器不继承 /app 的修改
+user = "root"                  # 评分以 root 运行，候选由 test_outputs.py 降权到 runner
+collect = []
+
+[verifier.env]
+
+[agent]
+timeout_sec = 1800             # 审核口径 900–1800；连续超时再从 900 提到 1800，不要堆到 3600
+user = "runner"                # 解题与参考解以 runner 运行；Dockerfile 不写 USER，保活进程留在 root
+
+[environment]
+network_mode = "public"
+allow_internet = true
+build_timeout_sec = 900
+os = "linux"
+cpus = 1
+memory_mb = 2048
+storage_mb = 4096
+gpus = 0
+mcp_servers = []
+
+[environment.env]
+
+[solution.env]
