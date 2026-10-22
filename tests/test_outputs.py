@@ -62,14 +62,19 @@ def make_case(
     clocks,
     noise=0.0,
     phase=0.0,
+    deactivation=0.0,
 ):
     equilibrium = kb / (kf + kb)
     samples = []
     for index, clock in enumerate(clocks):
         elapsed = clock - dead_time
-        fraction = equilibrium + (initial - equilibrium) * math.exp(
-            -(kf + kb) * elapsed
-        )
+        if deactivation > 0.0:
+            decay_integral = ((kf + kb) / deactivation) * (
+                1.0 - math.exp(-deactivation * elapsed)
+            )
+        else:
+            decay_integral = (kf + kb) * elapsed
+        fraction = equilibrium + (initial - equilibrium) * math.exp(-decay_integral)
         absorbance = blank + concentration * (
             epsilon_a * fraction + epsilon_b * (1.0 - fraction)
         )
@@ -89,7 +94,13 @@ def make_case(
         "blank_absorbance": blank,
         "samples": samples,
     }
-    return payload, {"equilibrium": equilibrium, "kf": kf, "kb": kb, "dead": dead_time}
+    return payload, {
+        "equilibrium": equilibrium,
+        "kf": kf,
+        "kb": kb,
+        "dead": dead_time,
+        "deactivation": deactivation,
+    }
 
 
 def call_case(payload):
@@ -110,7 +121,7 @@ def relative_error(actual, expected):
 # ---------- gate: invocation and output contract ----------
 
 def test_prints_only_the_contract_fields():
-    """「程序向标准输出写一个 JSON 对象，只含以下五个字段」"""
+    """「程序向标准输出写一个 JSON 对象，只含以下七个字段」"""
     payload, _ = make_case(
         initial=0.8,
         concentration=0.015,
@@ -129,6 +140,8 @@ def test_prints_only_the_contract_fields():
         "forward_rate_per_s",
         "reverse_rate_per_s",
         "dead_time_s",
+        "activity_model",
+        "catalyst_deactivation_per_s",
     }
 
 
@@ -276,58 +289,71 @@ def test_rate_ratio_matches_reported_equilibrium_constant():
 
 # ---------- difficulty_3: controller clock delay ----------
 
-def test_dead_time_is_estimated_from_early_clock_samples():
-    """「控制器时钟与实际反应起点之间存在一个非负且固定的输送延迟」"""
+def test_strong_activity_decay_is_selected_and_quantified():
+    """「活性可能稳定，也可能按一阶指数规律衰减」"""
     payload, truth = make_case(
-        initial=0.76,
-        concentration=0.0155,
+        initial=0.80,
+        concentration=0.0165,
         epsilon_a=1380.0,
         epsilon_b=0.0,
         blank=0.0,
-        kf=0.0048,
-        kb=0.0022,
-        dead_time=1.45,
-        clocks=[1.70, 1.92, 2.27, 2.74, 3.35, 4.25, 5.60, 7.35, 9.80, 13.20, 18.10],
-        noise=0.000018,
+        kf=0.0060,
+        kb=0.0030,
+        dead_time=1.20,
+        clocks=[1.48, 1.72, 2.05, 2.50, 3.10, 3.90, 5.00, 6.50, 8.60, 11.50, 15.50, 21.00, 28.00, 37.00],
+        noise=0.000020,
         phase=0.4,
+        deactivation=0.018,
     )
     result = call_case(payload)
-    assert abs(float(result["dead_time_s"]) - truth["dead"]) < 0.12
+    assert result["activity_model"] == "exponential_decay"
+    assert relative_error(
+        result["catalyst_deactivation_per_s"], truth["deactivation"]
+    ) < 0.08
+    assert abs(float(result["dead_time_s"]) - truth["dead"]) < 0.15
 
 
-def test_dead_time_remains_visible_for_faster_trace():
-    """「后段又常把平衡组成判到另一侧」"""
+def test_stable_activity_is_not_confused_with_parameter_noise():
+    """「取 BIC 较小的模型」"""
     payload, truth = make_case(
-        initial=0.31,
+        initial=0.43,
         concentration=0.018,
         epsilon_a=1250.0,
         epsilon_b=0.0,
         blank=0.0,
-        kf=0.0065,
-        kb=0.0055,
-        dead_time=2.20,
-        clocks=[2.55, 2.82, 3.18, 3.70, 4.32, 5.10, 6.25, 7.80, 9.90, 12.70, 16.50],
-        noise=0.000024,
+        kf=0.0044,
+        kb=0.0021,
+        dead_time=1.60,
+        clocks=[1.88, 2.12, 2.46, 2.90, 3.52, 4.38, 5.50, 7.05, 9.10, 11.85, 15.50, 20.40, 27.00],
+        noise=0.000018,
         phase=1.1,
+        deactivation=0.0,
     )
     result = call_case(payload)
+    assert result["activity_model"] == "stable"
+    assert result["catalyst_deactivation_per_s"] == 0.0
     assert abs(float(result["dead_time_s"]) - truth["dead"]) < 0.12
 
 
-def test_dead_time_with_irregular_controller_timestamps():
-    """「早期采样点与控制器时钟对不上」"""
+def test_weak_decay_is_retained_when_bic_supports_the_extra_parameter():
+    """「程序需要根据整段曲线在“稳定活性”和“指数失活”之间作出选择」"""
     payload, truth = make_case(
-        initial=0.90,
-        concentration=0.011,
-        epsilon_a=1710.0,
+        initial=0.91,
+        concentration=0.0105,
+        epsilon_a=1680.0,
         epsilon_b=0.0,
         blank=0.0,
-        kf=0.0033,
-        kb=0.0014,
-        dead_time=0.73,
-        clocks=[0.95, 1.02, 1.18, 1.41, 1.73, 2.20, 2.81, 3.54, 4.47, 5.76, 7.35, 9.40],
-        noise=0.000015,
+        kf=0.0090,
+        kb=0.0040,
+        dead_time=0.85,
+        clocks=[1.02, 1.15, 1.34, 1.62, 2.00, 2.55, 3.25, 4.20, 5.45, 7.05, 9.20, 12.10, 16.00, 21.20, 28.00, 37.00, 49.00],
+        noise=0.000012,
         phase=2.0,
+        deactivation=0.0045,
     )
     result = call_case(payload)
-    assert abs(float(result["dead_time_s"]) - truth["dead"]) < 0.12
+    assert result["activity_model"] == "exponential_decay"
+    assert relative_error(
+        result["catalyst_deactivation_per_s"], truth["deactivation"]
+    ) < 0.12
+    assert abs(float(result["dead_time_s"]) - truth["dead"]) < 0.15

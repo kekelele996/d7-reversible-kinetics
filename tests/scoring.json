@@ -30,17 +30,17 @@
       "weight": 0.11,
       "rationale": "难点2 可逆速率拆分：检查平衡常数和两个速率的方向一致"
     },
-    "test_outputs.py::test_dead_time_is_estimated_from_early_clock_samples": {
+    "test_outputs.py::test_strong_activity_decay_is_selected_and_quantified": {
       "weight": 0.10,
-      "rationale": "难点3 输送延迟：早期采样点对时钟偏移敏感，本组合计0.30"
+      "rationale": "难点3 活性模型：强失活需选择指数模型并恢复失活速率，本组合计0.30"
     },
-    "test_outputs.py::test_dead_time_remains_visible_for_faster_trace": {
+    "test_outputs.py::test_stable_activity_is_not_confused_with_parameter_noise": {
       "weight": 0.10,
-      "rationale": "难点3 输送延迟：较快曲线中把延迟并入速率会偏离单向量"
+      "rationale": "难点3 活性模型：稳定活性不能被噪声误判为失活"
     },
-    "test_outputs.py::test_dead_time_with_irregular_controller_timestamps": {
+    "test_outputs.py::test_weak_decay_is_retained_when_bic_supports_the_extra_parameter": {
       "weight": 0.10,
-      "rationale": "难点3 输送延迟：非等间隔时刻排除按固定步长平移的捷径"
+      "rationale": "难点3 活性模型：弱失活必须通过BIC参数惩罚后再保留"
     }
   }
 }

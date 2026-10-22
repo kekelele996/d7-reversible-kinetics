@@ -156,6 +156,8 @@ def estimate(case):
         "forward_rate_per_s": round(forward_rate, 8),
         "reverse_rate_per_s": round(reverse_rate, 8),
         "dead_time_s": round(dead_time, 3),
+        "activity_model": "stable",
+        "catalyst_deactivation_per_s": 0.0,
     }
 
 

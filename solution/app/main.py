@@ -41,13 +41,20 @@ def _read_samples(case):
     return rows
 
 
-def _linear_fit(rows, base, span, initial, relaxation, dead_time):
+def _linear_fit(rows, base, span, initial, relaxation, dead_time, deactivation):
     exp_terms = []
     for clock, _ in rows:
         elapsed = clock - dead_time
         if elapsed < -1.0e-10:
             raise ValueError("sample precedes the fitted reaction start")
-        exp_terms.append(math.exp(-relaxation * max(0.0, elapsed)))
+        elapsed = max(0.0, elapsed)
+        if deactivation > 1.0e-12:
+            decay_integral = (relaxation / deactivation) * (
+                1.0 - math.exp(-deactivation * elapsed)
+            )
+        else:
+            decay_integral = relaxation * elapsed
+        exp_terms.append(math.exp(-decay_integral))
 
     numerator = 0.0
     denominator = 0.0
@@ -71,13 +78,15 @@ def _linear_fit(rows, base, span, initial, relaxation, dead_time):
     return rms, equilibrium
 
 
-def _grid_search(rows, initial, base, span, relaxation_values, dead_values):
+def _grid_search(
+    rows, initial, base, span, relaxation_values, dead_values, deactivation
+):
     """Return the lowest-residual point on a two-dimensional search grid."""
     best = (float("inf"), 0.0, 0.0)
     for relaxation in relaxation_values:
         for dead_time in dead_values:
             rms, _ = _linear_fit(
-                rows, base, span, initial, relaxation, dead_time
+                rows, base, span, initial, relaxation, dead_time, deactivation
             )
             if rms < best[0]:
                 best = (rms, relaxation, dead_time)
@@ -100,9 +109,125 @@ def _dead_window(center, span, upper):
     return [low + (high - low) * index / 30.0 for index in range(31)]
 
 
-def _fit(case):
-    rows = _read_samples(case)
-    base, span = _response_scale(case)
+def _deactivation_window(center, span):
+    low = max(1.0e-6, center / (1.0 + span))
+    high = center * (1.0 + span)
+    return [
+        math.exp(
+            math.log(low)
+            + (math.log(high) - math.log(low)) * index / 12.0
+        )
+        for index in range(13)
+    ]
+
+
+def _nelder_mead(case, rows, base, span, allow_decay, start):
+    def objective(vector):
+        relaxation = math.exp(vector[0])
+        dead_time = vector[1]
+        deactivation = math.exp(vector[2]) if allow_decay else 0.0
+        if not (LAMBDA_MIN <= relaxation <= LAMBDA_MAX):
+            return 1.0e6
+        upper = max(0.0, min(item[0] for item in rows) - 0.02)
+        if dead_time < 0.0 or dead_time > upper:
+            return 1.0e6
+        rms, _ = _linear_fit(
+            rows,
+            base,
+            span,
+            float(case["feed_fraction_a"]),
+            relaxation,
+            dead_time,
+            deactivation,
+        )
+        return rms * rms
+
+    dimensions = 3 if allow_decay else 2
+    initial_decay = max(start[3], 0.001) if allow_decay else 0.0
+    initial = [math.log(start[1]), start[2]]
+    if allow_decay:
+        initial.append(math.log(initial_decay))
+    steps = [0.18, max(0.04, 0.08 * max(start[2], 0.1))]
+    if allow_decay:
+        steps.append(0.55)
+    simplex = [list(initial)]
+    for index in range(dimensions):
+        point = list(initial)
+        point[index] += steps[index]
+        simplex.append(point)
+    values = [objective(point) for point in simplex]
+
+    for _ in range(320):
+        order = sorted(range(dimensions + 1), key=lambda index: values[index])
+        simplex = [simplex[index] for index in order]
+        values = [values[index] for index in order]
+        if max(
+            abs(simplex[index][axis] - simplex[0][axis])
+            for index in range(1, dimensions + 1)
+            for axis in range(dimensions)
+        ) < 2.0e-9:
+            break
+        centroid = [
+            math.fsum(point[axis] for point in simplex[:-1]) / dimensions
+            for axis in range(dimensions)
+        ]
+        worst = simplex[-1]
+        reflected = [centroid[i] + (centroid[i] - worst[i]) for i in range(dimensions)]
+        reflected_value = objective(reflected)
+        if reflected_value < values[0]:
+            expanded = [
+                centroid[i] + 2.0 * (reflected[i] - centroid[i])
+                for i in range(dimensions)
+            ]
+            expanded_value = objective(expanded)
+            if expanded_value < reflected_value:
+                simplex[-1], values[-1] = expanded, expanded_value
+            else:
+                simplex[-1], values[-1] = reflected, reflected_value
+            continue
+        if reflected_value < values[-2]:
+            simplex[-1], values[-1] = reflected, reflected_value
+            continue
+        if reflected_value < values[-1]:
+            contracted = [
+                centroid[i] + 0.5 * (reflected[i] - centroid[i])
+                for i in range(dimensions)
+            ]
+        else:
+            contracted = [
+                centroid[i] + 0.5 * (worst[i] - centroid[i])
+                for i in range(dimensions)
+            ]
+        contracted_value = objective(contracted)
+        if contracted_value < min(values[-1], reflected_value):
+            simplex[-1], values[-1] = contracted, contracted_value
+        else:
+            best = simplex[0]
+            for index in range(1, dimensions + 1):
+                simplex[index] = [
+                    best[axis] + 0.5 * (simplex[index][axis] - best[axis])
+                    for axis in range(dimensions)
+                ]
+                values[index] = objective(simplex[index])
+
+    best_index = min(range(dimensions + 1), key=lambda index: values[index])
+    vector = simplex[best_index]
+    relaxation = math.exp(vector[0])
+    dead_time = vector[1]
+    deactivation = math.exp(vector[2]) if allow_decay else 0.0
+    rms, equilibrium = _linear_fit(
+        rows,
+        base,
+        span,
+        float(case["feed_fraction_a"]),
+        relaxation,
+        dead_time,
+        deactivation,
+    )
+    return rms, equilibrium, relaxation, dead_time, deactivation
+
+
+def _fit_mode(case, rows, base, span, allow_decay):
     initial = float(case["feed_fraction_a"])
     dead_upper = max(0.0, min(item[0] for item in rows) - 0.02)
 
@@ -111,48 +236,45 @@ def _fit(case):
             math.log(LAMBDA_MIN)
             + (math.log(LAMBDA_MAX) - math.log(LAMBDA_MIN)) * index / 95.0
         )
-        for index in range(96)
+        for index in range(73)
     ]
-    coarse_dead = [dead_upper * index / 72.0 for index in range(73)]
-    best = _grid_search(
-        rows, initial, base, span, coarse_lambda, coarse_dead
+    coarse_dead = [dead_upper * index / 48.0 for index in range(49)]
+    deactivation_values = (
+        [0.0005, 0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064, 0.12]
+        if allow_decay
+        else [0.0]
     )
-
-    lambda_span = 0.42
-    dead_span = 0.16
-    for iteration in range(24):
-        _, relaxation, dead_time = best
-        lambda_candidate = _grid_search(
+    best = (float("inf"), 0.0, 0.0, 0.0)
+    for deactivation in deactivation_values:
+        candidate = _grid_search(
             rows,
             initial,
             base,
             span,
-            _lambda_window(relaxation, lambda_span),
-            [dead_time],
+            coarse_lambda,
+            coarse_dead,
+            deactivation,
         )
-        if lambda_candidate[0] <= best[0]:
-            best = lambda_candidate
+        candidate = (*candidate, deactivation)
+        if candidate[0] < best[0]:
+            best = candidate
 
-        _, relaxation, dead_time = best
-        dead_candidate = _grid_search(
-            rows,
-            initial,
-            base,
-            span,
-            [relaxation],
-            _dead_window(dead_time, dead_span, dead_upper),
-        )
-        if dead_candidate[0] <= best[0]:
-            best = dead_candidate
+    return _nelder_mead(case, rows, base, span, allow_decay, best)
 
-        if iteration in (3, 7, 12, 17):
-            lambda_span *= 0.5
-            dead_span *= 0.5
 
-    rms, equilibrium = _linear_fit(
-        rows, base, span, initial, best[1], best[2]
-    )
-    return rms, equilibrium, best[1], best[2]
+def _fit(case):
+    rows = _read_samples(case)
+    base, span = _response_scale(case)
+    stable = _fit_mode(case, rows, base, span, allow_decay=False)
+    decay = _fit_mode(case, rows, base, span, allow_decay=True)
+    sample_count = len(rows)
+    stable_rss = max(stable[0] ** 2 * sample_count, 1.0e-30)
+    decay_rss = max(decay[0] ** 2 * sample_count, 1.0e-30)
+    stable_bic = sample_count * math.log(stable_rss / sample_count) + 3.0 * math.log(sample_count)
+    decay_bic = sample_count * math.log(decay_rss / sample_count) + 4.0 * math.log(sample_count)
+    if decay[4] > 1.0e-6 and decay_bic < stable_bic:
+        return decay
+    return stable
 
 
 def _rates(equilibrium, relaxation):
@@ -162,7 +284,8 @@ def _rates(equilibrium, relaxation):
 
 
 def estimate(case):
-    _, equilibrium, relaxation, dead_time = _fit(case)
+    fit = _fit(case)
+    _, equilibrium, relaxation, dead_time, deactivation = fit
     forward_rate, reverse_rate = _rates(equilibrium, relaxation)
     equilibrium_constant = (1.0 - equilibrium) / equilibrium
     return {
@@ -171,6 +294,8 @@ def estimate(case):
         "forward_rate_per_s": round(forward_rate, 8),
         "reverse_rate_per_s": round(reverse_rate, 8),
         "dead_time_s": round(dead_time, 3),
+        "activity_model": "exponential_decay" if deactivation > 1.0e-6 else "stable",
+        "catalyst_deactivation_per_s": round(deactivation, 8),
     }
 
 
