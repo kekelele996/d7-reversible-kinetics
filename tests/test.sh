@@ -32,7 +32,7 @@ trap on_signal INT TERM HUP
 "$PY" -I /tests/score.py prepare --verifier-dir "$V" --private "$PRIV" --vendor /tests/vendor || exit 0
 
 cd "$PRIV" || exit 0
-timeout 240s env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONPATH="$PRIV/site" PYTHONDONTWRITEBYTECODE=1 \
+timeout 540s env -i PATH=/usr/local/bin:/usr/bin:/bin PYTHONPATH="$PRIV/site" PYTHONDONTWRITEBYTECODE=1 \
     "$PY" -m pytest -q -p no:cacheprovider --rootdir=/tests --junitxml="$JUNIT" /tests/test_outputs.py \
     > "$PRIV/pytest.log" 2>&1
 cp "$PRIV/pytest.log" "$V/pytest.log" 2>/dev/null

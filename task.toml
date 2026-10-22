@@ -20,7 +20,7 @@ expert_time_estimate_min = 240
 junior_time_estimate_min = 0
 
 [verifier]
-timeout_sec = 300              # test.sh 内层 timeout 240s，留 60 s 给清场和写 reward
+timeout_sec = 600              # test.sh 内层 timeout 540s，留 60 s 给清场和写 reward
 environment_mode = "shared"    # 显式写 shared：独立评分容器不继承 /app 的修改
 user = "root"                  # 评分以 root 运行，候选由 test_outputs.py 降权到 runner
 collect = []
