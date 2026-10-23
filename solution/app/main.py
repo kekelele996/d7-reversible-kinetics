@@ -286,6 +286,7 @@ def _rates(equilibrium, relaxation):
 def estimate(case):
     fit = _fit(case)
     _, equilibrium, relaxation, dead_time, deactivation = fit
+    reported_dead_time = dead_time
     forward_rate, reverse_rate = _rates(equilibrium, relaxation)
     equilibrium_constant = (1.0 - equilibrium) / equilibrium
     return {
@@ -293,7 +294,7 @@ def estimate(case):
         "equilibrium_constant": round(equilibrium_constant, 6),
         "forward_rate_per_s": round(forward_rate, 8),
         "reverse_rate_per_s": round(reverse_rate, 8),
-        "dead_time_s": round(dead_time, 3),
+        "dead_time_s": round(reported_dead_time, 3),
         "activity_model": "exponential_decay" if deactivation > 1.0e-6 else "stable",
         "catalyst_deactivation_per_s": round(deactivation, 8),
     }

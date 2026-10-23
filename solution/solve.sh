@@ -30,8 +30,8 @@ REVERT = {
         "    forward_rate = relaxation - reverse_rate",
     ),
     "difficulty_3": (
-        "    dead_upper = max(0.0, min(item[0] for item in rows) - 0.02)",
-        "    dead_upper = 0.0",
+        "    reported_dead_time = dead_time",
+        "    reported_dead_time = 0.0",
     ),
 }
 skip = [item for item in os.environ.get("SKIP", "").split(",") if item]

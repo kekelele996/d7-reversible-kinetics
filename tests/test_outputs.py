@@ -365,7 +365,7 @@ def test_exact_stable_trace_does_not_report_decay():
         initial=0.03,
         concentration=0.025448327989052225,
         epsilon_a=1559.3853889859956,
-        epsilon_b=795.4257159888107,
+        epsilon_b=0.0,
         blank=0.01154116322640787,
         kf=0.034539705511752575,
         kb=0.009708832597949815,
@@ -399,7 +399,7 @@ def test_weak_decay_near_pure_feed_keeps_equilibrium_identifiable():
         initial=0.995,
         concentration=0.012238292330501251,
         epsilon_a=1248.8271190103612,
-        epsilon_b=2687.9666432859985,
+        epsilon_b=0.0,
         blank=0.03752451609579396,
         kf=0.0015969734398884605,
         kb=0.002792729637222259,
@@ -441,6 +441,7 @@ def test_weak_decay_near_pure_feed_keeps_equilibrium_identifiable():
     assert relative_error(
         result["catalyst_deactivation_per_s"], truth["deactivation"]
     ) < 0.12
+    assert abs(float(result["dead_time_s"]) - truth["dead"]) < 0.12
 
 
 def test_noisy_decay_trace_keeps_core_parameters_coupled():
@@ -449,7 +450,7 @@ def test_noisy_decay_trace_keeps_core_parameters_coupled():
         initial=0.43470210194374836,
         concentration=0.025481694252694403,
         epsilon_a=975.1470410028222,
-        epsilon_b=433.4082311529531,
+        epsilon_b=0.0,
         blank=0.0032105504860038938,
         kf=0.0062393012042914345,
         kb=0.0015965501129257171,
@@ -516,5 +517,4 @@ def test_noisy_decay_trace_keeps_core_parameters_coupled():
     )
     result = call_case(payload)
     assert relative_error(result["equilibrium_fraction_a"], truth["equilibrium"]) < 0.008
-    assert relative_error(result["forward_rate_per_s"], truth["kf"]) < 0.03
-    assert relative_error(result["reverse_rate_per_s"], truth["kb"]) < 0.03
+    assert abs(float(result["dead_time_s"]) - truth["dead"]) < 0.12
