@@ -357,3 +357,37 @@ def test_weak_decay_is_retained_when_bic_supports_the_extra_parameter():
         result["catalyst_deactivation_per_s"], truth["deactivation"]
     ) < 0.12
     assert abs(float(result["dead_time_s"]) - truth["dead"]) < 0.15
+
+
+def test_exact_stable_trace_does_not_report_decay():
+    """「活性可能稳定，也可能按一阶指数规律衰减」"""
+    payload, truth = make_case(
+        initial=0.03,
+        concentration=0.025448327989052225,
+        epsilon_a=1559.3853889859956,
+        epsilon_b=795.4257159888107,
+        blank=0.01154116322640787,
+        kf=0.034539705511752575,
+        kb=0.009708832597949815,
+        dead_time=1.2601320078482245,
+        clocks=[
+            1.3401320078482246,
+            3.798998644218323,
+            7.198028607151327,
+            8.514031129490501,
+            8.934921766260189,
+            10.72800605235682,
+            11.759563942691573,
+            12.446254138463106,
+            13.631094662592233,
+            14.393012298700214,
+            14.541260388402733,
+            15.612403120855346,
+            21.37670627721609,
+        ],
+        deactivation=0.0,
+    )
+    result = call_case(payload)
+    assert result["activity_model"] == "stable"
+    assert result["catalyst_deactivation_per_s"] == 0.0
+    assert abs(float(result["dead_time_s"]) - truth["dead"]) < 0.12

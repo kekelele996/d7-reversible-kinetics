@@ -31,16 +31,20 @@
       "rationale": "难点2 可逆速率拆分：检查平衡常数和两个速率的方向一致"
     },
     "test_outputs.py::test_strong_activity_decay_is_selected_and_quantified": {
-      "weight": 0.10,
+      "weight": 0.08,
       "rationale": "难点3 活性模型：强失活需选择指数模型并恢复失活速率，本组合计0.30"
     },
     "test_outputs.py::test_stable_activity_is_not_confused_with_parameter_noise": {
-      "weight": 0.10,
+      "weight": 0.08,
       "rationale": "难点3 活性模型：稳定活性不能被噪声误判为失活"
     },
     "test_outputs.py::test_weak_decay_is_retained_when_bic_supports_the_extra_parameter": {
-      "weight": 0.10,
+      "weight": 0.07,
       "rationale": "难点3 活性模型：弱失活必须通过BIC参数惩罚后再保留"
+    },
+    "test_outputs.py::test_exact_stable_trace_does_not_report_decay": {
+      "weight": 0.07,
+      "rationale": "难点3 活性模型：无噪声稳定曲线不能被数值残差误判为微小失活"
     }
   }
 }
